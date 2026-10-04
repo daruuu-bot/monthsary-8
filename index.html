@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Put the heart together</title>
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --night: #1d2140;
+    --night-2: #2a2f5a;
+    --rose: #ff5c7f;
+    --paper: #fbf6ec;
+    --ink: #3a2e3f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: radial-gradient(ellipse at 50% 30%, var(--night-2), var(--night) 70%);
+    color: #fff;
+    font-family: Georgia, serif;
+    overflow-x: hidden;
+    touch-action: none;
+  }
+  #wrap { margin: 0 auto; position: relative; transition: opacity 1.6s ease; }
+  #wrap.fade { opacity: 0; pointer-events: none; }
+  #stage { position: absolute; left: 0; top: 0; width: 560px; height: 600px; transform-origin: 0 0; }
+
+  #hint {
+    position: absolute; left: 0; right: 0; top: 70px; text-align: center;
+    font-size: 20px; opacity: .8; transition: opacity .6s;
+  }
+  #board { position: absolute; left: 120px; top: 140px; width: 320px; height: 320px; }
+  #board path { fill: rgba(255,255,255,.04); stroke: rgba(255,255,255,.35); stroke-width: 2; stroke-dasharray: 8 8; }
+
+  .piece {
+    position: absolute; width: 160px; height: 160px; cursor: grab;
+    filter: drop-shadow(0 6px 10px rgba(0,0,0,.35));
+    transition: filter .3s;
+  }
+  .piece svg { display: block; width: 100%; height: 100%; }
+  .piece.drag { cursor: grabbing; z-index: 10; filter: drop-shadow(0 14px 18px rgba(0,0,0,.45)); }
+  .piece.snap { transition: left .18s ease-out, top .18s ease-out, filter .3s; pointer-events: none; filter: none; }
+  #stage.complete .piece { filter: drop-shadow(0 0 22px rgba(255,92,127,.8)); animation: beat .9s ease-in-out 2; }
+  #stage.complete #board { opacity: 0; }
+  @keyframes beat { 50% { transform: scale(1.05); } }
+
+  #letter-view {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    padding: 24px; overflow-y: auto; touch-action: auto;
+  }
+  #letter-view.show { display: flex; }
+  #paper {
+    background: var(--paper); color: var(--ink); width: min(620px, 100%);
+    padding: 48px 44px; border-radius: 4px; margin: auto;
+    box-shadow: 0 30px 60px rgba(0,0,0,.45);
+    font-family: "Caveat", "Segoe Script", cursive; font-size: 28px; line-height: 1.45;
+    opacity: 0; transition: opacity 1.6s ease;
+  }
+  #letter-view.show #paper { opacity: 1; }
+  #paper p { margin: 0 0 18px; opacity: 0; transform: translateY(8px); transition: opacity 1s ease, transform 1s ease; }
+  #paper p.in { opacity: 1; transform: none; }
+  #paper .greeting { font-weight: 600; font-size: 34px; }
+  #paper .sig { font-weight: 600; font-size: 34px; color: #c9345a; margin-top: -6px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .01s !important; animation: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <div id="stage">
+      <div id="hint">Drag the four pieces together to make the heart.</div>
+      <svg id="board" viewBox="0 0 320 320"><path id="outline"/></svg>
+    </div>
+  </div>
+
+  <div id="letter-view"><div id="paper"></div></div>
+
+<script>
+// ✏️ EDIT YOUR LETTER HERE
+window.LETTER = {
+  greeting: "Dear Tere,",
+
+  // Each string is one paragraph.
+  paragraphs: [
+    "Happy Monthsary baby, Cheers to another month to us. I want to say na I love you so so so much and that Im sorry for being bad these past days maybe month Im trying to be better, but i dont know why im still bad and im guilty and i hate myself for that. Thank you for being a part of my life and staying with me. You made my life so much better simce we met, and you are the person i only want to be with, i promise po na susundin na po kita lagi kasi i know kaya mo po ako pinagsasabihan kasi para sa ikabubuti ko po, Thank you for caring I love you. Ik ik its late cuz i forgot to code this and i just made this today actually ate gwy and ate kate ask kanina how us nag meet then when is our monthsary and i said 4 then they said 4 ngaun ah, so ayun na shock ako, so nung pag uwi namin nag start agad ako mag code so ye im finishing these few more lines habang nakain ka ng candy hehhehehe so. I love you so much mahal ko.",
+    
+    
+  ],
+
+  closing: "Always yours,",
+  signature: "YOUR BABY",
+};
+</script>
+<script>
+const HEART = "M160 290 C40 200 10 120 10 85 C10 40 45 15 85 15 C115 15 145 35 160 60 C175 35 205 15 235 15 C275 15 310 40 310 85 C310 120 280 200 160 290 Z";
+const STAGE_W = 560, STAGE_H = 600, BOARD_X = 120, BOARD_Y = 140, SIZE = 160, SNAP = 36;
+const COLORS = ["#ff7a96", "#ff5c7f", "#f24b72", "#e03e66"];
+
+const wrap = document.getElementById("wrap");
+const stage = document.getElementById("stage");
+document.getElementById("outline").setAttribute("d", HEART);
+
+// Scale the fixed-size stage to fit the window.
+let scale = 1;
+function fit() {
+  scale = Math.min(1, window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+  stage.style.transform = `scale(${scale})`;
+  wrap.style.width = STAGE_W * scale + "px";
+  wrap.style.height = STAGE_H * scale + "px";
+}
+window.addEventListener("resize", fit);
+fit();
+
+// Starting corners, shuffled so pieces begin out of place.
+const corners = [[10, 10], [390, 10], [10, 430], [390, 430]].sort(() => Math.random() - 0.5);
+let placed = 0;
+
+for (let i = 0; i < 4; i++) {
+  const qx = i % 2, qy = i >> 1;
+  const targetX = BOARD_X + qx * SIZE, targetY = BOARD_Y + qy * SIZE;
+
+  const el = document.createElement("div");
+  el.className = "piece";
+  el.style.left = corners[i][0] + "px";
+  el.style.top = corners[i][1] + "px";
+  el.innerHTML = `<svg viewBox="${qx * SIZE} ${qy * SIZE} ${SIZE} ${SIZE}">
+    <path d="${HEART}" fill="${COLORS[i]}" stroke="rgba(255,255,255,.55)" stroke-width="2"/></svg>`;
+  stage.appendChild(el);
+
+  let dx = 0, dy = 0;
+  const toStage = (e) => {
+    const r = stage.getBoundingClientRect();
+    return [(e.clientX - r.left) / scale, (e.clientY - r.top) / scale];
+  };
+
+  el.addEventListener("pointerdown", (e) => {
+    el.setPointerCapture(e.pointerId);
+    const [x, y] = toStage(e);
+    dx = x - el.offsetLeft; dy = y - el.offsetTop;
+    el.classList.add("drag");
+  });
+  el.addEventListener("pointermove", (e) => {
+    if (!el.classList.contains("drag")) return;
+    const [x, y] = toStage(e);
+    el.style.left = x - dx + "px";
+    el.style.top = y - dy + "px";
+  });
+  el.addEventListener("pointerup", () => {
+    el.classList.remove("drag");
+    if (Math.hypot(el.offsetLeft - targetX, el.offsetTop - targetY) < SNAP) {
+      el.classList.add("snap");
+      el.style.left = targetX + "px";
+      el.style.top = targetY + "px";
+      if (++placed === 4) complete();
+    }
+  });
+}
+
+function complete() {
+  document.getElementById("hint").style.opacity = 0;
+  stage.classList.add("complete");
+  setTimeout(() => wrap.classList.add("fade"), 1900);   // heart fades out
+  setTimeout(showLetter, 3700);                           // letter fades in
+}
+
+function showLetter() {
+  wrap.style.display = "none";
+  const paper = document.getElementById("paper");
+  const letter = window.LETTER || { greeting: "Letter not found", paragraphs: ["The letter block at the top of index.html is missing."], closing: "", signature: "" };
+
+  const lines = [
+    [letter.greeting, "greeting"],
+    ...(letter.paragraphs || []).map((t) => [t, ""]),
+    [letter.closing, ""],
+    [letter.signature, "sig"],
+  ].filter(([t]) => t);
+
+  const els = lines.map(([text, cls]) => {
+    const p = document.createElement("p");
+    p.textContent = text;
+    if (cls) p.className = cls;
+    paper.appendChild(p);
+    return p;
+  });
+
+  document.getElementById("letter-view").classList.add("show");
+  els.forEach((p, i) => setTimeout(() => p.classList.add("in"), 900 + i * 700));
+}
+</script>
+</body>
+</html>
